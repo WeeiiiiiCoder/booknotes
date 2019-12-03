@@ -429,5 +429,216 @@ $ git commit -m "remove test.txt"
 
 调用`git checkout -- <file>`把删除的文件恢复到最新版本。
 
+## 添加远程库
 
+在本地版本库中获取github远程库地址，调用命令关联远程库。 添加后，远程库的名字就是`origin`，这是Git默认的叫法，也可以改成别的，但是`origin`这个名字一看就知道是远程库。 
+
+~~~
+$ git remote add origin git@github.com:WeeiiiiiCoder/booknotes.git
+~~~
+
+把本地库的文件推送到远程库
+
+~~~
+$ git push -u origin master
+~~~
+
+ 由于远程库是空的，我们第一次推送`master`分支时，加上了`-u`参数，Git不但会把本地的`master`分支内容推送的远程新的`master`分支，还会把本地的`master`分支和远程的`master`分支关联起来，在以后的推送或者拉取时就可以简化命令。 
+
+以后通过`git push origin master `推送本地master到远程库。
+
+## 克隆远程库
+
+和上面一样获取github仓库地址，并调用`git clone`命令克隆远程库到本地
+
+~~~
+$ git clone git@github.com:WeeiiiiiCoder/booknotes.git
+~~~
+
+## 创建与合并分支
+
+Git的每次`commit`可以串成一个时间线，默认只有一条时间线，就是master分支。`HEAD`严格来说不是指向提交，而是指向`master`，而`master`才是指向提交的，所以`HEAD`就是指的当前分支。
+
+每次提交，`master`都会指向新的提交点，而`HEAD`指向`master`。当在`master`指向的某个提交点创建了新的分支`dev`之后，这个`dev`分支也会指向该提交点，如果`HEAD`再切换到`dev`，就表示分支为`dev`。
+
+此时，对工作区的提交和修改就是在`dev`分支上进行的了，`dev`指针会指向新的`commit`提交点，而`master`指针还是指向原来的提交点。
+
+如果`dev`分支工作完成，想把`dev`合并到`master`上。Git怎么合并呢？最简单的方法，就是直接把`master`指向`dev`的当前提交，就完成了合并。 所以Git合并分支也很快！就改改指针，工作区内容也不变！   合并完分支后，甚至可以删除`dev`分支。删除`dev`分支就是把`dev`指针给删掉，删掉后，我们就剩下了一条`master`分支：
+
+先创建`dev`分支，并切换到该分支。
+
+```
+$ git checkout -b dev
+Switched to a new branch 'dev'
+```
+
+`-b`表示先创建分支，再切换到新分支，相当于
+
+~~~
+$ git branch dev
+$ git checkout dev
+~~~
+
+或者创建并切换到新的`dev`分支，可以使用：
+
+```
+$ git switch -c dev
+```
+
+切换完分支之后可以查看当前分支，`*`表示当前分支。
+
+~~~
+$ git branch
+* dev
+  master
+~~~
+
+然后对工作区的`readme.txt`文件添加一行，并进行提交。
+
+~~~
+Creating a new branch is quick.
+
+$ git add readme.txt
+$ git commit -m 'create branch'
+[dev c6ddfbe] create branch
+ 1 file changed, 1 insertion(+)
+~~~
+
+在切换到`master`分支，查看该文件
+
+~~~
+$ git switch master
+Switched to branch 'master'
+
+$ git branch
+  dev
+* master
+
+$ cat readme.txt
+git is a distribution version control system
+git is free software distributed under the GPL
+git is wocao
+git consists of index
+git tracks changes
+git created by linus
+~~~
+
+发现`dev`分支上的提交并没有在`master`分支上，`master`分支还是之前的提交点的状态。
+
+所以此时需要把`dev`分支的内容合并到`master`分支上。调用`git merge <branch>`合并指定分支到当前分支。
+
+~~~
+$ git merge dev
+Updating 0bee6e0..c6ddfbe
+Fast-forward
+ readme.txt | 1 +
+ 1 file changed, 1 insertion(+)
+~~~
+
+在合并分支的结果中， 注意到上面的`Fast-forward`信息，Git告诉我们，这次合并是“快进模式”，也就是直接把`master`指向`dev`的当前提交，所以合并速度非常快，但也有特殊情况。
+
+此时在查看文件内容
+
+~~~
+$ cat readme.txt
+git is a distribution version control system
+git is free software distributed under the GPL
+git is wocao
+git consists of index
+git tracks changes
+git created by linus
+Creating a new branch is quick.
+~~~
+
+文件内容为`dev`分支最新提交的。
+
+此时有需要可以删除`dev`分支了
+
+~~~
+$ git branch -d dev
+Deleted branch dev (was c6ddfbe).
+~~~
+
+## 解决冲突
+
+刚刚在`dev`分支对`readme.txt`文件修改提交后直接切换到`master`分支，并没有在`master`
+
+分支对`readme.txt`文件进行提交修改。但是如果刚好两个分支都对同一个文件进行提交修改，那么就可能产生冲突。
+
+~~~
+# 创建并切换到新的pro分支
+$ git switch -c pro
+Switched to a new branch 'pro'
+# 修改提交readme.txt
+$ git add readme.txt
+$ git commit -m 'add simple'
+[pro 83b2f7a] add simple
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+# 切换回master分支
+$ git checkout master
+Switched to branch 'master'
+# 修改提交readme.txt文件
+$ git add readme.txt
+$ git commit -m 'add & simple'
+[master e790cb2] add & simple
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+# 合并pro分支到master分支,readme.txt文件产生冲突
+$ git merge pro
+Auto-merging readme.txt
+CONFLICT (content): Merge conflict in readme.txt
+Automatic merge failed; fix conflicts and then commit the result.
+~~~
+
+此时需要进入`readme.txt`文件解决冲突。
+
+~~~
+$ vi readme.txt
+git is a distribution version control system
+git is free software distributed under the GPL
+git is wocao
+git consists of index
+git tracks changes
+git created by linus
+<<<<<<< HEAD
+Creating a new branch is quick & simple.
+=======
+Creating a new branch is quick and simple.
+>>>>>>> pro
+~~~
+
+修改为`pro`分支的内容，再重新提交
+
+~~~
+$ git add readme.txt
+$ git commit -m 'fix conflict'
+[master 57972e7] fix conflict
+~~~
+
+此时可以查看分支合并情况
+
+~~~
+$ git log --graph --pretty=oneline --abbrev-commit
+*   57972e7 (HEAD -> master) fix conflict
+|\
+| * 83b2f7a (pro) add simple
+* | e790cb2 add & simple
+|/
+* c6ddfbe create branch
+* 0bee6e0 git is better than svn
+* 3455379 git tracks changes-2
+* 716afe6 git track changes
+* 460eec8 understand how git works
+* f0074eb append GPL
+* c6d8007 add distribution
+* 90333ef first file
+~~~
+
+最后删除分支
+
+~~~
+$ git branch -d pro
+Deleted branch pro (was 83b2f7a).
+~~~
+
+## 分支管理策略
 
