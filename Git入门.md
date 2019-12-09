@@ -642,3 +642,265 @@ Deleted branch pro (was 83b2f7a).
 
 ## 分支管理策略
 
+通常Git在进行分支合并的时候就使用`Fast Forward`模式，但是这种模式在删除分支后，会丢失分支信息。如果强制禁用`Fast forward`模式，Git就会在merge的时候生成一个新的commit id，这样分支历史就会看到分支信息。下面演示一下
+
+先创建被切换到`dev`分支
+
+~~~
+$ git switch -c dev
+~~~
+
+再修改`readme.txt`文件，并提交
+
+~~~
+$ git add readme.txt
+
+$ git commit -m 'add merge'
+~~~
+
+切换回`master`分支
+
+~~~
+$ git switch master
+~~~
+
+禁用`fast Forward`模式合并分支
+
+~~~
+$ git merge --no-ff -m 'add merge' dev
+~~~
+
+调用日志会出现`dev`分支的commit id
+
+~~~~
+$ git log --graphy --pretty=oneline
+*   7c02e8c9bd6d7fa7b456307b203d3763c4bb5953 (HEAD -> master) Merge branch 'dev'
+|\
+| * 137c44b9d869c657e9ba9a1fec1b226548550f7a (dev) add merge
+|/
+*   57972e7e8511250e7725ff11d74a64ac851bc037 fix conflict
+~~~~
+
+## bug分支
+
+软件开发中，bug就像家常便饭一样。有了bug就需要修复，在Git中，由于分支是如此的强大，所以，每个bug都可以通过一个新的临时分支来修复，修复后，合并分支，然后将临时分支删除。
+
+当你在`dev`分支上工作时，接到一个修复一个代号101的bug的任务，很自然地，你想创建一个分支`issue-101`来修复它，但是`dev`分支上的工作还没有结束
+
+```
+$ git status
+On branch dev
+Changes to be committed:
+  (use "git reset HEAD <file>..." to unstage)
+
+	new file:   hello.py
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git checkout -- <file>..." to discard changes in working directory)
+
+	modified:   readme.txt
+```
+
+并不是你不想提交，而是工作只进行到一半，还没法提交，预计完成还需1天时间。但是，必须在两个小时内修复该bug，怎么办？
+
+幸好，Git还提供了一个`stash`功能，可以把当前工作现场“储藏”起来，等以后恢复现场后继续工作：
+
+```
+$ git stash
+Saved working directory and index state WIP on dev: f52c633 add merge
+```
+
+现在，用`git status`查看工作区，就是干净的（除非有没有被Git管理的文件），因此可以放心地创建分支来修复bug。
+
+首先确定要在哪个分支上修复bug，假定需要在`master`分支上修复，就从`master`创建临时分支：
+
+```
+$ git checkout master
+Switched to branch 'master'
+Your branch is ahead of 'origin/master' by 6 commits.
+  (use "git push" to publish your local commits)
+
+$ git checkout -b issue-101
+Switched to a new branch 'issue-101'
+```
+
+现在修复bug，需要把“Git is free software ...”改为“Git is a free software ...”，然后提交：
+
+```
+$ git add readme.txt 
+$ git commit -m "fix bug 101"
+[issue-101 4c805e2] fix bug 101
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+```
+
+修复完成后，切换到`master`分支，并完成合并，最后删除`issue-101`分支：
+
+```
+$ git checkout master
+Switched to branch 'master'
+Your branch is ahead of 'origin/master' by 6 commits.
+  (use "git push" to publish your local commits)
+
+$ git merge --no-ff -m "merged bug fix 101" issue-101
+Merge made by the 'recursive' strategy.
+ readme.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+```
+
+太棒了，原计划两个小时的bug修复只花了5分钟！现在，是时候接着回到`dev`分支干活了！
+
+```
+$ git checkout dev
+Switched to branch 'dev'
+
+$ git status
+On branch dev
+nothing to commit, working tree clean
+```
+
+工作区是干净的，刚才的工作现场存到哪去了？用`git stash list`命令看看：
+
+```
+$ git stash list
+stash@{0}: WIP on dev: f52c633 add merge
+```
+
+工作现场还在，Git把stash内容存在某个地方了，但是需要恢复一下，有两个办法：
+
+一是用`git stash apply`恢复，但是恢复后，stash内容并不删除，你需要用`git stash drop`来删除；
+
+另一种方式是用`git stash pop`，恢复的同时把stash内容也删了：
+
+```
+$ git stash pop
+On branch dev
+Changes to be committed:
+  (use "git reset HEAD <file>..." to unstage)
+
+	new file:   hello.py
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git checkout -- <file>..." to discard changes in working directory)
+
+	modified:   readme.txt
+
+Dropped refs/stash@{0} (5d677e2ee266f39ea296182fb2354265b91b3b2a)
+```
+
+再用`git stash list`查看，就看不到任何stash内容了：
+
+```
+$ git stash list
+```
+
+你可以多次stash，恢复的时候，先用`git stash list`查看，然后恢复指定的stash，用命令：
+
+```
+$ git stash apply stash@{0}
+```
+
+在master分支上修复了bug后，我们要想一想，dev分支是早期从master分支分出来的，所以，这个bug其实在当前dev分支上也存在。
+
+那怎么在dev分支上修复同样的bug？重复操作一次，提交不就行了？
+
+有木有更简单的方法？
+
+有！
+
+同样的bug，要在dev上修复，我们只需要把`4c805e2 fix bug 101`这个提交所做的修改“复制”到dev分支。注意：我们只想复制`4c805e2 fix bug 101`这个提交所做的修改，并不是把整个master分支merge过来。
+
+为了方便操作，Git专门提供了一个`cherry-pick`命令，让我们能复制一个特定的提交到当前分支：
+
+```
+$ git branch
+* dev
+  master
+$ git cherry-pick 4c805e2
+[master 1d4b803] fix bug 101
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+```
+
+Git自动给dev分支做了一次提交，注意这次提交的commit是`1d4b803`，它并不同于master的`4c805e2`，因为这两个commit只是改动相同，但确实是两个不同的commit。用`git cherry-pick`，我们就不需要在dev分支上手动再把修bug的过程重复一遍。
+
+有些聪明的童鞋会想了，既然可以在master分支上修复bug后，在dev分支上可以“重放”这个修复过程，那么直接在dev分支上修复bug，然后在master分支上“重放”行不行？当然可以，不过你仍然需要`git stash`命令保存现场，才能从dev分支切换到master分支。
+
+## Feature分支
+
+当项目开发一个新特性的时候，建议新建一个feature分支，在这个分支上开发，合并最后删除该分支。
+
+实战
+
+新feature，并在feature分支未合并之前删除分支时会提示该分支还没有完全合并，可以用`git branch -D <branch>`强制删除分支。
+
+~~~
+$ git checkout -b ship
+Switched to a new branch 'ship'
+
+$ vi ship.py
+
+$ git add ship.py
+
+$ git commit -m 'add feature ship'
+[ship 6e0844a] add feature ship
+ 1 file changed, 1 insertion(+)
+ create mode 100644 ship.py
+
+$ git checkout master
+Switched to branch 'master'
+
+$ git branch -d ship
+error: The branch 'ship' is not fully merged.
+If you are sure you want to delete it, run 'git branch -D ship'.
+
+$ git branch -D ship
+Deleted branch ship (was 6e0844a).
+~~~
+
+## 多人协作
+
+当在本地克隆远程仓库的时候，实际Git自动把本地的`master`分支和远程仓库的`master`分支对应起来了，远程仓库默认名称是`origin`。
+
+`git remote`命令可以查看远程库信息
+
+~~~
+$ git remote
+origin
+~~~
+
+或者，用`git remote -v`显示更详细的信息：
+
+```
+$ git remote -v
+origin  git@github.com:michaelliao/learngit.git (fetch)
+origin  git@github.com:michaelliao/learngit.git (push)
+```
+
+上面显示了可以抓取和推送的`origin`的地址。如果没有推送权限，就看不到push的地址。
+
+### 推送分支
+
+推送本地分支到远程仓库，推送时要指定本地分支， 这样，Git就会把该分支推送到远程库对应的远程分支上 。 如果推送失败，先用`git pull`抓取远程的新提交； 
+
+~~~
+$ git push origin master
+$ git push origin dev
+~~~
+
+### 抓取分支
+
+从远程库克隆项目
+
+~~~
+git clone git@server-name:address/xxx.git
+~~~
+
+刚克隆的时候本地只能看到`master`分支，可以通过`git branch`检验
+
+所以在本地创建`dev`分支对应远程库`origin`的`dev`分支，在该分支上进行操作。 建立本地分支和远程分支的关联，使用`git branch --set-upstream branch-name origin/branch-name`； 
+
+~~~
+$ git checkout -b dev origin/dev
+~~~
+
